@@ -28,7 +28,15 @@ bot.direction = function (game) {
 
 
     /* ~~ This code decides what to do ~~ */
-    var task = 'goToFlower'
+    var task;
+    //If the bot is far from base, prioritise returning home. This code activates when the walking distance to the base is 1.5 times the number of turns left in the game. This gives a safety margin in case of extra steps and may allow more pollen gathering afterwards.
+    if (bot.findDistance(myBot.pos, myBase.pos) >= 1.5 * (game.totalTurns - game.turn)) {
+        task = 'returnToBase'
+    }
+    //If we are not near the end of the game, behave normally.
+    else {
+        task = 'goToFlower'
+    }
 
 
     /* ~~This code decides how to do it ~~ */
@@ -36,14 +44,19 @@ bot.direction = function (game) {
         case 'goToFlower':
             console.log('Going to flower with highest pollen:distance ratio')
             //Choose the flower with the largest value of pollen / distance
-            let flowerToUse;
+            let flowerToUse = game.flowers[0];
+            let flowerScore = flowerToUse.pollen / bot.findDistance(game.myBot.pos, flowerToUse.pos)
             for (let flower of game.flowers) {
-                if (flowerToUse == undefined || flower.pollen / bot.findDistance(game.myBot.pos, flower.pos) > flowerToUse.pollen / bot.findDistance(game.myBot.pos, flowerToUse.pos)) {
+                if (flower.pollen / bot.findDistance(game.myBot.pos, flower.pos) > flowerScore) {
                     flowerToUse = flower
+                    flowerScore = flowerToUse.pollen / bot.findDistance(game.myBot.pos, flowerToUse.pos)
                 }
             }
             console.log(`Going to flower at (${flowerToUse.pos[0]}, ${flowerToUse.pos[1]}) with ${flowerToUse.pollen} pollen.`)
             myDir = bot.nextStep(game.myBot.pos, flowerToUse.pos)
+            break;
+        case 'returnToBase':
+            myDir = bot.nextStep(game.myBot.pos, game.myBase.pos)
             break;
         default:
             console.log("Going random!")
