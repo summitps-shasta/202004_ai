@@ -59,7 +59,8 @@ bot.direction = function (game) {
             }
 
             //Calculate the attractiveness of my base. This is 1.2 * my pollen / distance to base. We multiply by 1.2 because we want going to the base to be slightly more important than collecting pollen because that's what ultimately affects the final score. The amount of pollen I have is how much it will affect my score, and we divide by distance because we don't want to go back to base if it's too far away.
-            attractivenessGrid[game.myBase.pos[0]][game.myBase.pos[1]] = 1.2 * game.myBot.pollen / bot.findDistance(game.myBot.pos, game.myBase.pos)
+            //TODO update comments around here
+            attractivenessGrid[game.myBase.pos[0]][game.myBase.pos[1]] = 0.3 * game.myBot.pollen / bot.findDistance(game.myBot.pos, game.myBase.pos)
 
             //TODO will calculate attractiveness of other bees, but that is not yet implemented.
 
@@ -135,16 +136,20 @@ bot.direction = function (game) {
             }
             */
             //TODO replace the comments here
-            let attractivenessGrid = []                 //Initialize as an array
+            let target = [0, 0]
+            let targetAttractiveness = 0
             for (x = 0; x < game.mapSize; x++) {         //Create the first dimension, which consists of many nested arrays
-                attractivenessGrid.push([])             //Initialize each nested array
                 for (y = 0; y < game.mapSize; y++) {     //Populate each nested array with zeroes
-                    attractivenessGrid[x].push(0)
+                    if (attractivenessGrid[x][y] > targetAttractiveness) {
+                        targetAttractiveness = attractivenessGrid[x][y]
+                        target = [x, y]
+                    }
                 }
             }
 
             // myDir = bot.nextStep(game.myBot.pos, flowerToUse.pos)
-            // console.log(`Going in ${myDir} to (${flowerToUse.pos[0]}, ${flowerToUse.pos[1]}) with ${flowerToUse.pollen} pollen.`)
+            myDir = bot.nextStep(game.myBot.pos, target)
+            console.log(`Going in ${myDir} to (${target[0]}, ${target[1]}).`)
             break;
         case 'returnToBase':
             console.log('Going home')
