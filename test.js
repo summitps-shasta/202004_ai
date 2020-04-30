@@ -30,7 +30,7 @@ bot.direction = function (game) {
     /* ~~ This code decides what to do ~~ */
     var task;
     //If the bot is far from base, prioritise returning home. This code activates when the walking distance to the base is 1.5 times the number of turns left in the game. This gives a safety margin in case of extra steps and may allow more pollen gathering afterwards.
-    if (bot.findDistance(myBot.pos, myBase.pos) >= 1.5 * (game.totalTurns - game.turn)) {
+    if (bot.findDistance(game.myBot.pos, game.myBase.pos) >= 1.5 * (game.totalTurns - game.turn)) {
         task = 'returnToBase'
     }
     //If we are not near the end of the game, behave normally.
@@ -42,20 +42,112 @@ bot.direction = function (game) {
     /* ~~This code decides how to do it ~~ */
     switch (task) {
         case 'goToFlower':
-            console.log('Going to flower with highest pollen:distance ratio')
-            //Choose the flower with the largest value of pollen / distance
-            let flowerToUse = game.flowers[0];
-            let flowerScore = flowerToUse.pollen / bot.findDistance(game.myBot.pos, flowerToUse.pos)
-            for (let flower of game.flowers) {
-                if (flower.pollen / bot.findDistance(game.myBot.pos, flower.pos) > flowerScore) {
-                    flowerToUse = flower
-                    flowerScore = flowerToUse.pollen / bot.findDistance(game.myBot.pos, flowerToUse.pos)
+            console.log('Behaving normally')
+            //Every point on the grid gets an attractiveness score based on how advantageous or disadvantageous it would be to go there. For most points, this will be zero because there is nothing happening in most places.
+            let attractivenessGrid = []                 //Initialize as an array
+            for (x = 0; x < game.mapSize; x++) {         //Create the first dimension, which consists of many nested arrays
+                attractivenessGrid.push([])             //Initialize each nested array
+                for (y = 0; y < game.mapSize; y++) {     //Populate each nested array with zeroes
+                    attractivenessGrid[x].push(0)
                 }
             }
-            console.log(`Going to flower at (${flowerToUse.pos[0]}, ${flowerToUse.pos[1]}) with ${flowerToUse.pollen} pollen.`)
-            myDir = bot.nextStep(game.myBot.pos, flowerToUse.pos)
+
+            //Map out the attractiveness of each flower. This will be equivalent to pollen / walking distance because flowers with more pollen are better and closer flowers are better.
+            for (let flower of game.flowers) {
+                //attractivenessGrid is accessed using x and y coordinates. The value of each coordinate pair will represent the attractiveness of the point at that index.
+                attractivenessGrid[flower.pos[0]][flower.pos[1]] = flower.pollen / bot.findDistance(game.myBot.pos, flower.pos)
+            }
+
+            //Calculate the attractiveness of my base. This is 1.2 * my pollen / distance to base. We multiply by 1.2 because we want going to the base to be slightly more important than collecting pollen because that's what ultimately affects the final score. The amount of pollen I have is how much it will affect my score, and we divide by distance because we don't want to go back to base if it's too far away.
+            attractivenessGrid[game.myBase.pos[0]][game.myBase.pos[1]] = 1.2 * game.myBot.pollen / bot.findDistance(game.myBot.pos, game.myBase.pos)
+
+            //TODO will calculate attractiveness of other bees, but that is not yet implemented.
+
+            //Choose which point to go to based on weighted average of attractiveness values. This will approach actual attractive points as we get near them, while still giving us detours around repulsive points.
+            //TODO maybe also try force vectors.
+            //TODO change this comment
+            /*
+            let vectors = []
+            for (x = 0; x < game.mapSize; x++) {
+                vectors.push([])
+                for (y = 0; y < game.mapSize; y++) {
+                    force = attractivenessGrid[x][y]
+                    theta = Math.atan((y - game.myBot.y) / (x - game.myBot.x))
+                    vectors[x].push({
+                        force: force,
+                        theta: theta,
+                        forceX: force * Math.cos(theta),
+                        forceY: force * Math.sin(theta)
+                    })
+                }
+            }
+            let forceXnet
+            let forceYnet
+            for (x = 0; x < game.mapSize; x++) {
+                for (y = 0; y < game.mapSize; y++) {
+                    forceXnet += vectors[x][y].forceX
+                    forceYnet += vectors[x][y].forceY
+                }
+            }
+            //Now that we have a net force for x and y, use these to decide which way to go
+            let canMoveX = (() => {
+                if (forceXnet > 0) {
+                    return !game.barricades.some(element => {
+                        element[0] == game.myBot.pos[0] + 1
+                    })
+                } else if (forceXnet < 0) {
+                    return !game.barricades.some(element => {
+                        element[0] == game.myBot.pos[0] - 1
+                    })
+                } else {
+                    return false
+                }
+            })()
+            let canMoveY = (() => {
+                if (forceYnet > 0) {
+                    return !game.barricades.some(element => {
+                        element[1] == game.myBot.pos[1] + 1
+                    })
+                } else if (forceYnet < 0) {
+                    return !game.barricades.some(element => {
+                        element[1] == game.myBot.pos[1] - 1
+                    })
+                } else {
+                    return false
+                }
+            })()
+            if (canMoveX && canMoveY) {
+                if (Math.abs(forceXnet) > Math.abs(forceYnet)) {
+                    myDir = (forceXnet > 0) ? 'east' : 'west'
+                } else if (Math.abs(forceYnet) > Math.abs(forceXnet)) {
+                    myDir = (forceYnet > 0) ? 'south' : 'north'
+                } else if (Math.round(Math.random)) {
+                    myDir = (forceXnet > 0) ? 'east' : 'west'
+                } else {
+                    myDir = (forceYnet > 0) ? 'south' : 'north'
+                }
+            } else if (canMoveX) {
+                myDir = (forceXnet > 0) ? 'east' : 'west'
+            } else if (canMoveY) {
+                myDir = (forceYnet > 0) ? 'south' : 'north'
+            } else {
+                myDir = dirs[Math.floor(Math.random() * 4)];
+            }
+            */
+            //TODO replace the comments here
+            let attractivenessGrid = []                 //Initialize as an array
+            for (x = 0; x < game.mapSize; x++) {         //Create the first dimension, which consists of many nested arrays
+                attractivenessGrid.push([])             //Initialize each nested array
+                for (y = 0; y < game.mapSize; y++) {     //Populate each nested array with zeroes
+                    attractivenessGrid[x].push(0)
+                }
+            }
+
+            // myDir = bot.nextStep(game.myBot.pos, flowerToUse.pos)
+            // console.log(`Going in ${myDir} to (${flowerToUse.pos[0]}, ${flowerToUse.pos[1]}) with ${flowerToUse.pollen} pollen.`)
             break;
         case 'returnToBase':
+            console.log('Going home')
             myDir = bot.nextStep(game.myBot.pos, game.myBase.pos)
             break;
         default:
