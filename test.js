@@ -67,134 +67,36 @@ bot.direction = function (game) {
                 attractivenessGrid[enemy.pos[0]][enemy.pos[1]] = (enemy.pollen - game.myBot.pollen) / (2 * bot.findDistance(game.myBot.pos, enemy.pos))
             }
 
-            //Choose which point to go to based on weighted average of attractiveness values. This will approach actual attractive points as we get near them, while still giving us detours around repulsive points.
-            //TODO maybe also try force vectors.
-            //TODO change this comment
-            /*
-            let vectors = []
-            for (x = 0; x < game.mapSize; x++) {
-                vectors.push([])
-                for (y = 0; y < game.mapSize; y++) {
-                    force = attractivenessGrid[x][y]
-                    theta = Math.atan((y - game.myBot.y) / (x - game.myBot.x))
-                    vectors[x].push({
-                        force: force,
-                        theta: theta,
-                        forceX: force * Math.cos(theta),
-                        forceY: force * Math.sin(theta)
-                    })
-                }
-            }
-            let forceXnet
-            let forceYnet
-            for (x = 0; x < game.mapSize; x++) {
-                for (y = 0; y < game.mapSize; y++) {
-                    forceXnet += vectors[x][y].forceX
-                    forceYnet += vectors[x][y].forceY
-                }
-            }
-            //Now that we have a net force for x and y, use these to decide which way to go
-            let canMoveX = (() => {
-                if (forceXnet > 0) {
-                    return !game.barricades.some(element => {
-                        element[0] == game.myBot.pos[0] + 1
-                    })
-                } else if (forceXnet < 0) {
-                    return !game.barricades.some(element => {
-                        element[0] == game.myBot.pos[0] - 1
-                    })
-                } else {
-                    return false
-                }
-            })()
-            let canMoveY = (() => {
-                if (forceYnet > 0) {
-                    return !game.barricades.some(element => {
-                        element[1] == game.myBot.pos[1] + 1
-                    })
-                } else if (forceYnet < 0) {
-                    return !game.barricades.some(element => {
-                        element[1] == game.myBot.pos[1] - 1
-                    })
-                } else {
-                    return false
-                }
-            })()
-            if (canMoveX && canMoveY) {
-                if (Math.abs(forceXnet) > Math.abs(forceYnet)) {
-                    myDir = (forceXnet > 0) ? 'east' : 'west'
-                } else if (Math.abs(forceYnet) > Math.abs(forceXnet)) {
-                    myDir = (forceYnet > 0) ? 'south' : 'north'
-                } else if (Math.round(Math.random)) {
-                    myDir = (forceXnet > 0) ? 'east' : 'west'
-                } else {
-                    myDir = (forceYnet > 0) ? 'south' : 'north'
-                }
-            } else if (canMoveX) {
-                myDir = (forceXnet > 0) ? 'east' : 'west'
-            } else if (canMoveY) {
-                myDir = (forceYnet > 0) ? 'south' : 'north'
-            } else {
-                myDir = dirs[Math.floor(Math.random() * 4)];
-            }
-            */
-            //TODO replace the comments here
-            /*let target = [0, 0]
-            let targetAttractiveness = 0
+            //Create a list of where we want to try going, in the order of how much we want to go.
+            let targets = []
             for (x = 0; x < game.mapSize; x++) {         //Create the first dimension, which consists of many nested arrays
                 for (y = 0; y < game.mapSize; y++) {     //Populate each nested array with zeroes
-                    if (attractivenessGrid[x][y] > targetAttractiveness) {
-                        targetAttractiveness = attractivenessGrid[x][y]
-                        target = [x, y]
-                    }
+                    targets.push({
+                        pos: [x, y],
+                        attractiveness: attractivenessGrid[x][y]
+                    })
                 }
             }
+            targets.sort((a, b) => {
+                if (a.attractiveness < b.attractiveness) {
+                    return -1
+                } else if (a.attractiveness > b.attractiveness) {
+                    return 1
+                } else {
+                    return 0
+                }
+            })
+            targets.reverse()   //Yes, I could have swapped -1 and 1 in the previous function to produce marginally faster code, but sort is expected to sort low to high, and I don't want to break that expectation.
 
-            // myDir = bot.nextStep(game.myBot.pos, flowerToUse.pos)
-            myDir = bot.nextStep(game.myBot.pos, target)
-            console.log(`Going in ${myDir} to (${target[0]}, ${target[1]}).`)*/
-            // let target = [0, 0]
-            // let weightSum = [0, 0]
-            // for (x = 0; x < game.mapSize; x++) {
-            //     for (y = 0; y < game.mapSize; y++) {
-            //         target[0] += x * attractivenessGrid[x][y]
-            //         target[1] += y * attractivenessGrid[x][y]
-            //         weightSum[0] += attractivenessGrid[x][y]
-            //         weightSum[1] += attractivenessGrid[x][y]
-            //     }
-            // }
-            let target = [0, 0]
-            let weightSum = [0, 0]
-            function average(values) {
-                let sum = 0;
-                for (value of values) {
-                    sum += value
+            //Go to the first target on the list that is not blocked. A target is blocked if the magnitude of the attractiveness of least attractive target is greater than the magnitude of the attractiveness of the current target and the next step to go to both targets is the same. Loop until that is not the case, then break.
+            let evil = targets[targets.length - 1]
+            for (target of targets) {
+                myDir = bot.nextStep(game.myBot.pos, target.pos)
+                if (!(Math.abs(evil.attractiveness) > target.attractiveness && myDir == bot.nextStep(game.myBot.pos, evil.pos))) {
+                    break
                 }
-                return sum / values.length
             }
-            function transpose(array) {
-                let result = []
-                for (let y = 0; y < array[0].length; y++) {
-                    result.push([])
-                    for (let x = 0; x < array.length; x++) {
-                        result[y].push(array[x][y])
-                    }
-                }
-                return result
-            }
-            for (x = 0; x < game.mapSize; x++) {
-                target[0] += x * average(attractivenessGrid[x])
-                weightSum[0] += average(attractivenessGrid[x])
-            }
-            for (y = 0; y < game.mapSize; y++) {
-                target[1] += y * average(transpose(attractivenessGrid)[y])
-                weightSum[1] += average(transpose(attractivenessGrid)[y])
-            }
-            target[0] /= weightSum[0]
-            target[1] /= weightSum[1]
-            target = target.map(Math.round)
-            myDir = bot.nextStep(game.myBot.pos, target)
-            console.log(`Going in ${myDir} to (${target[0]}, ${target[1]}).`)
+            console.log(`Going in ${myDir}`)
             if (myDir == undefined) {
                 console.log('WARNING: MYDIR SHOULD NOT BE UNDEFINED')
                 myDir = dirs[Math.floor(Math.random() * 4)];
