@@ -35,13 +35,13 @@ bot.direction = function (game) {
     }
     //If we are not near the end of the game, behave normally.
     else {
-        task = 'goToFlower'
+        task = 'normal'
     }
 
 
     /* ~~This code decides how to do it ~~ */
     switch (task) {
-        case 'goToFlower':
+        case 'normal':
             console.log('Behaving normally')
             //Every point on the grid gets an attractiveness score based on how advantageous or disadvantageous it would be to go there. For most points, this will be zero because there is nothing happening in most places.
             let attractivenessGrid = []                 //Initialize as an array
@@ -139,7 +139,7 @@ bot.direction = function (game) {
             }
             */
             //TODO replace the comments here
-            let target = [0, 0]
+            /*let target = [0, 0]
             let targetAttractiveness = 0
             for (x = 0; x < game.mapSize; x++) {         //Create the first dimension, which consists of many nested arrays
                 for (y = 0; y < game.mapSize; y++) {     //Populate each nested array with zeroes
@@ -152,7 +152,53 @@ bot.direction = function (game) {
 
             // myDir = bot.nextStep(game.myBot.pos, flowerToUse.pos)
             myDir = bot.nextStep(game.myBot.pos, target)
+            console.log(`Going in ${myDir} to (${target[0]}, ${target[1]}).`)*/
+            // let target = [0, 0]
+            // let weightSum = [0, 0]
+            // for (x = 0; x < game.mapSize; x++) {
+            //     for (y = 0; y < game.mapSize; y++) {
+            //         target[0] += x * attractivenessGrid[x][y]
+            //         target[1] += y * attractivenessGrid[x][y]
+            //         weightSum[0] += attractivenessGrid[x][y]
+            //         weightSum[1] += attractivenessGrid[x][y]
+            //     }
+            // }
+            let target = [0, 0]
+            let weightSum = [0, 0]
+            function average(values) {
+                let sum = 0;
+                for (value of values) {
+                    sum += value
+                }
+                return sum / values.length
+            }
+            function transpose(array) {
+                let result = []
+                for (let y = 0; y < array[0].length; y++) {
+                    result.push([])
+                    for (let x = 0; x < array.length; x++) {
+                        result[y].push(array[x][y])
+                    }
+                }
+                return result
+            }
+            for (x = 0; x < game.mapSize; x++) {
+                target[0] += x * average(attractivenessGrid[x])
+                weightSum[0] += average(attractivenessGrid[x])
+            }
+            for (y = 0; y < game.mapSize; y++) {
+                target[1] += y * average(transpose(attractivenessGrid)[y])
+                weightSum[1] += average(transpose(attractivenessGrid)[y])
+            }
+            target[0] /= weightSum[0]
+            target[1] /= weightSum[1]
+            target = target.map(Math.round)
+            myDir = bot.nextStep(game.myBot.pos, target)
             console.log(`Going in ${myDir} to (${target[0]}, ${target[1]}).`)
+            if (myDir == undefined) {
+                console.log('WARNING: MYDIR SHOULD NOT BE UNDEFINED')
+                myDir = dirs[Math.floor(Math.random() * 4)];
+            }
             break;
         case 'returnToBase':
             console.log('Going home')
