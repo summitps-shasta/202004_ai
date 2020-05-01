@@ -62,7 +62,10 @@ bot.direction = function (game) {
             //TODO update comments around here
             attractivenessGrid[game.myBase.pos[0]][game.myBase.pos[1]] = 0.3 * game.myBot.pollen / bot.findDistance(game.myBot.pos, game.myBase.pos)
 
-            //TODO will calculate attractiveness of other bees, but that is not yet implemented.
+            //Calculate the attractiveness of the other bees. This is the number of pollen that will be gained or lost divided by the distance. This is intentionally done after setting the attractiveness of the flowers in case the enemy bee is on a flower. The equation is the average of the two bots, minus my current pollen, divided by distance, or (((enemy pollen + my pollen) / 2) - my pollen) / distance. This can be expanded to ((enemy / 2) + (my / 2) - my) / distance, which simplifies to ((enemy / 2) - (my / 2)) / distance, then (enemy - my) / (2 * distance)
+            for (enemy of enemyBots) {
+                attractivenessGrid[enemy.pos[0]][enemy.pos[1]] = (enemy.pollen - game.myBot.pollen) / (2 * bot.findDistance(game.myBot.pos, enemy.pos))
+            }
 
             //Choose which point to go to based on weighted average of attractiveness values. This will approach actual attractive points as we get near them, while still giving us detours around repulsive points.
             //TODO maybe also try force vectors.
