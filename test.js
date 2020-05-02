@@ -10,9 +10,31 @@ bot.isTest = true;
 /* End Test Code */
 /***************************************************/
 //Write your code in this function!!!
+let persistent = [  //Variables that need to last more than one turn. There are four sets of them so during test runs, each of the four bots can have its own independent ones. This will not matter during the real run.
+
+    {
+        lastDir: undefined,
+        reversals: 0,
+        task: 'normal'
+    },
+    {
+        lastDir: undefined,
+        reversals: 0,
+        task: 'normal'
+    },
+    {
+        lastDir: undefined,
+        reversals: 0,
+        task: 'normal'
+    },
+    {
+        lastDir: undefined,
+        reversals: 0,
+        task: 'normal'
+    }
+]
+
 bot.direction = function (game) {
-
-
     /* ~~~ Determines and Organizes Data About The Game ~~~ */
     var enemyBots = [];
     var enemyBases = [];
@@ -22,95 +44,105 @@ bot.direction = function (game) {
             enemyBots.push(game.players[i]);
         }
     }
-
     var myDir = "none";
     var dirs = ["north", "east", "south", "west"];
 
-
     /* ~~ This code decides what to do ~~ */
-    var task;
-    //If the bot is far from base, prioritise returning home. This code activates when the walking distance to the base is 1.5 times the number of turns left in the game. This gives a safety margin in case of extra steps and may allow more pollen gathering afterwards.
-    if (bot.findDistance(game.myBot.pos, game.myBase.pos) >= 1.5 * (game.totalTurns - game.turn)) {
-        task = 'returnToBase'
+    //If the bot is far from base, prioritise returning home. This code activates when the walking distance to the base is 1.1 times the number of turns left in the game. 1.1 provides a 10% safety margin in case things go wrong, but it shouldn't be necessary. If we are at the base, go back to normal behavior.
+    if (bot.findDistance(game.myBot.pos, game.myBase.pos) >= 1.1 * (game.totalTurns - game.turn)) {
+        persistent[game.myBot.id].task = 'returnToBase'
     }
-    //If we are not near the end of the game, behave normally.
-    else {
-        task = 'normal'
+    if (game.myBot.pos.toString() == game.myBase.pos.toString()) {//toString is necessary because arrays are compared by reference, but we want to compare by value.
+        persistent[game.myBot.id].task = 'normal'
     }
-
-
     /* ~~This code decides how to do it ~~ */
-    switch (task) {
-        case 'normal':
-            console.log('Behaving normally')
-            //Every point on the grid gets an attractiveness score based on how advantageous or disadvantageous it would be to go there. For most points, this will be zero because there is nothing happening in most places.
-            let attractivenessGrid = []                 //Initialize as an array
-            for (x = 0; x < game.mapSize; x++) {         //Create the first dimension, which consists of many nested arrays
-                attractivenessGrid.push([])             //Initialize each nested array
-                for (y = 0; y < game.mapSize; y++) {     //Populate each nested array with zeroes
-                    attractivenessGrid[x].push(0)
-                }
-            }
+    if (persistent[game.myBot.id].task == 'normal') {
+        let targets = [] //Every point on the grid gets an attractiveness score based on how advantageous or disadvantageous it would be to go there. For most points, this will be zero because there is nothing happening in most places.
 
-            //Map out the attractiveness of each flower. This will be equivalent to pollen / walking distance because flowers with more pollen are better and closer flowers are better.
-            for (let flower of game.flowers) {
-                //attractivenessGrid is accessed using x and y coordinates. The value of each coordinate pair will represent the attractiveness of the point at that index.
-                attractivenessGrid[flower.pos[0]][flower.pos[1]] = flower.pollen / bot.findDistance(game.myBot.pos, flower.pos)
-            }
-
-            //Calculate the attractiveness of my base. This is 1.2 * my pollen / distance to base. We multiply by 1.2 because we want going to the base to be slightly more important than collecting pollen because that's what ultimately affects the final score. The amount of pollen I have is how much it will affect my score, and we divide by distance because we don't want to go back to base if it's too far away.
-            //TODO update comments around here
-            attractivenessGrid[game.myBase.pos[0]][game.myBase.pos[1]] = 0.3 * game.myBot.pollen / bot.findDistance(game.myBot.pos, game.myBase.pos)
-
-            //Calculate the attractiveness of the other bees. This is the number of pollen that will be gained or lost divided by the distance. This is intentionally done after setting the attractiveness of the flowers in case the enemy bee is on a flower. The equation is the average of the two bots, minus my current pollen, divided by distance, or (((enemy pollen + my pollen) / 2) - my pollen) / distance. This can be expanded to ((enemy / 2) + (my / 2) - my) / distance, which simplifies to ((enemy / 2) - (my / 2)) / distance, then (enemy - my) / (2 * distance)
-            for (enemy of enemyBots) {
-                attractivenessGrid[enemy.pos[0]][enemy.pos[1]] = (enemy.pollen - game.myBot.pollen) / (2 * bot.findDistance(game.myBot.pos, enemy.pos))
-            }
-
-            //Create a list of where we want to try going, in the order of how much we want to go.
-            let targets = []
-            for (x = 0; x < game.mapSize; x++) {         //Create the first dimension, which consists of many nested arrays
-                for (y = 0; y < game.mapSize; y++) {     //Populate each nested array with zeroes
-                    targets.push({
-                        pos: [x, y],
-                        attractiveness: attractivenessGrid[x][y]
-                    })
-                }
-            }
-            targets.sort((a, b) => {
-                if (a.attractiveness < b.attractiveness) {
-                    return -1
-                } else if (a.attractiveness > b.attractiveness) {
-                    return 1
-                } else {
-                    return 0
-                }
+        //Map out the attractiveness of each flower. This will be equivalent to pollen / walking distance because flowers with more pollen are better and closer flowers are better.
+        for (let flower of game.flowers) {
+            let distance = bot.findDistance(game.myBot.pos, flower.pos)
+            targets.push({
+                pos: flower.pos,
+                pollenNet: flower.pollen,
+                distance: distance,
+                attractiveness: flower.pollen / distance
             })
-            targets.reverse()   //Yes, I could have swapped -1 and 1 in the previous function to produce marginally faster code, but sort is expected to sort low to high, and I don't want to break that expectation.
+        }
 
-            //Go to the first target on the list that is not blocked. A target is blocked if the magnitude of the attractiveness of least attractive target is greater than the magnitude of the attractiveness of the current target and the next step to go to both targets is the same. Loop until that is not the case, then break.
-            let evil = targets[targets.length - 1]
-            for (target of targets) {
-                myDir = bot.nextStep(game.myBot.pos, target.pos)
-                if (!(Math.abs(evil.attractiveness) > target.attractiveness && myDir == bot.nextStep(game.myBot.pos, evil.pos))) {
-                    break
-                }
+        //Calculate the attractiveness of my base. This is my pollen / distance to base. The amount of pollen I have is how much it will affect my score, and we divide by distance because we don't want to go back to base if it's too far away.
+        let baseDistance = bot.findDistance(game.myBot.pos, game.myBase.pos)
+        targets.push({
+            pos: game.myBase.pos,
+            pollenNet: game.myBot.pollen,
+            distance: baseDistance,
+            attractiveness: game.myBot.pollen / baseDistance
+        })
+
+        //Calculate the attractiveness of the other bees. This is the number of pollen that will be gained or lost divided by the distance. This is intentionally done after setting the attractiveness of the flowers in case the enemy bee is on a flower. The equation is the average of the two bots, minus my current pollen, divided by distance, or (((enemy pollen + my pollen) / 2) - my pollen) / distance. This can be expanded to ((enemy / 2) + (my / 2) - my) / distance, which simplifies to ((enemy / 2) - (my / 2)) / distance, then (enemy - my) / (2 * distance)
+        for (enemy of enemyBots) {
+            let pollenNet = (enemy.pollen - game.myBot.pollen) / 2
+            let distance = bot.findDistance(game.myBot.pos, enemy.pos)
+            targets.push({
+                pos: enemy.pos,
+                pollenNet: pollenNet,
+                distance: distance,
+                attractiveness: pollenNet / distance
+            })
+        }
+
+        //Now, choose which target to go to
+        targets.sort((a, b) => {
+            if (a.attractiveness < b.attractiveness) {
+                return -1
+            } else if (a.attractiveness > b.attractiveness) {
+                return 1
+            } else {
+                return 0
             }
-            console.log(`Going in ${myDir}`)
-            if (myDir == undefined) {
-                console.log('WARNING: MYDIR SHOULD NOT BE UNDEFINED')
-                myDir = dirs[Math.floor(Math.random() * 4)];
+        })
+        targets.reverse()   //Yes, I could have swapped -1 and 1 in the previous function to produce marginally faster code, but sort is expected to sort low to high, and I don't want to break that expectation.
+
+        //Go to the first target on the list that is not blocked. A target is blocked if the magnitude of the attractiveness of least attractive target is greater than the magnitude of the attractiveness of the current target and the next step to go to both targets is the same. Loop until that is not the case, then break.
+        let evil = targets[targets.length - 1]
+        for (target of targets) {
+            myDir = bot.nextStep(game.myBot.pos, target.pos)
+            if (!(Math.abs(evil.attractiveness) > target.attractiveness && myDir == bot.nextStep(game.myBot.pos, evil.pos))) {
+                break
             }
-            break;
-        case 'returnToBase':
-            console.log('Going home')
-            myDir = bot.nextStep(game.myBot.pos, game.myBase.pos)
-            break;
-        default:
-            console.log("Going random!")
+        }
+        //Don't let the bot reverse too many times
+        persistent[game.myBot.id].lastDir = myDir
+        if (
+            myDir == 'north' && persistent[game.myBot.id].lastDir == 'south' ||
+            myDir == 'south' && persistent[game.myBot.id].lastDir == 'north' ||
+            myDir == 'west' && persistent[game.myBot.id].lastDir == 'east' ||
+            myDir == 'east' && persistent[game.myBot.id].lastDir == 'west'
+        ) {
+            persistent[game.myBot.id].reversals++;
+        } else {
+            persistent[game.myBot.id].reversals = 0
+        }
+        if (persistent[game.myBot.id].reversals > 3) {
+            myDir = {
+                'north': 'south',
+                'south': 'north',
+                'west': 'east',
+                'east': 'west'
+            }[myDir]
+            persistent[game.myBot.id].reversals = 0
+        }
+        console.log(`Going in ${myDir}`)
+        if (myDir == undefined || myDir == 'none') {
+            console.log('WARNING: MYDIR SHOULD NOT BE UNDEFINED')
             myDir = dirs[Math.floor(Math.random() * 4)];
-    }
+        }
+    } else {
+        console.log('Going home')
+        myDir = bot.nextStep(game.myBot.pos, game.myBase.pos)
 
+    }
     return myDir;
-} //DO NOT CHANGE ANYTHING BELOW THIS LINE
+}
+//DO NOT CHANGE ANYTHING BELOW THIS LINE
 bot();
