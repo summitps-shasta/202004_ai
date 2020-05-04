@@ -7,7 +7,7 @@ git push // pushes all changes to github
 */
 
 const PLAYER_NUMBER = 4; //Keep this as 4.
-const GAME_SPEED = 75; //Reccomended: 50-70 for good game visibility and speed. Speed unit of the game in milliseconds
+const GAME_SPEED = 50; //Reccomended: 50-70 for good game visibility and speed. Speed unit of the game in milliseconds
 const turnCount = 1000; //Reccomended: 1000 - 1500 for reasonable game time length. How many turns in a game. One turn is one player moving.
 const randomMap = true; //Reccomended: true. This decides whether the map is randomely generated or not. Randomely generated maps are symmetrical. If this is false, then a map will be chosen from maps.json, predrawn maps.
 const baseStealEnergy = 10; // The Amount of Energy Stolen from another player's base  Higher means more aggressive play 
@@ -105,8 +105,8 @@ games.push(new Game(games.length));
 games.push(new Game(games.length));
 games.push(new Game(games.length));
 
-io.on('connection', function(socket) { // When a new player is registered, add them to the database after checking the same username doesn't exist.
-    socket.on("newPlayer", function(obj) {
+io.on('connection', function (socket) { // When a new player is registered, add them to the database after checking the same username doesn't exist.
+    socket.on("newPlayer", function (obj) {
         console.log("Player requesting to register! Username: " + obj.username + ", key: " + obj.key)
         var hasUserName = false;
         for (let player in playerData) {
@@ -129,11 +129,11 @@ io.on('connection', function(socket) { // When a new player is registered, add t
     /* @Desc: Takes new direction from player and determines new position
      * @Params: data{} - dir(srt): direction chosen by player - name(str): name of player sending data
      */
-    socket.on("rerunGame", function(num) {
+    socket.on("rerunGame", function (num) {
 
         socket.emit("rerunGameData", replay.games[num])
     })
-    socket.on("new direction", function(data) {
+    socket.on("new direction", function (data) {
         //checking the game turn is still on the player who sent this direction. If it's not, the direction sent is disregarded.  
         if (data.id == games[data.gameId].idTurn) {
             //changing the player's position based on the string, also making sure they're not going off the map or into a barricade.
@@ -156,7 +156,7 @@ io.on('connection', function(socket) { // When a new player is registered, add t
 
     });
     //Runs when someone connects to the display website
-    socket.on("display", function() {
+    socket.on("display", function () {
         displays.push(socket)
         //Sending name data for selection for replaying games
         let stringArr = [];
@@ -183,7 +183,7 @@ io.on('connection', function(socket) { // When a new player is registered, add t
         for (var player in playerData) {
             mostWins.push([playerData[player].username, playerData[player].score]);
         }
-        mostWins.sort(function(a, b) {
+        mostWins.sort(function (a, b) {
             return b[1] - a[1];
         });
 
@@ -193,7 +193,7 @@ io.on('connection', function(socket) { // When a new player is registered, add t
         socket.emit("replayNames", { "rerunStr": stringArr, "scoreArray": JSON.stringify(mostWins) })
         socket.emit("queue", games);
     })
-    socket.on("name", function(key) {
+    socket.on("name", function (key) {
         console.log("user :" + key + " connected")
         //making sure the key is a key in the database.
         let tempname = checkKey(key);
@@ -223,13 +223,13 @@ io.on('connection', function(socket) { // When a new player is registered, add t
 
 //Pass the array to go through as a parameter.
 function broadcast(event, data, arr) {
-    arr.forEach(function(socket) {
+    arr.forEach(function (socket) {
         socket.emit(event, data);
     });
 }
 
 
-server.listen(process.env.PORT || 3000, process.env.IP || "0.0.0.0", function() {
+server.listen(process.env.PORT || 3000, process.env.IP || "0.0.0.0", function () {
     var addr = server.address();
     console.log("Server listening at", addr.address + ":" + addr.port);
 });
@@ -244,7 +244,7 @@ function resetGame(gameToReset) {
         }
         energyArr.push(gameToReset.bases[i].pollen);
     }
-    energyArr = energyArr.sort(function(a, b) { return b - a; });
+    energyArr = energyArr.sort(function (a, b) { return b - a; });
     //checking there isn't a tie between players
     if (energyArr[0] != energyArr[1]) {
         broadcast("endGame", { "winner": gameToReset.players[winner.id], "base": winner, "gameId": gameToReset.gameId }, sockets[gameToReset.gameId])
@@ -316,7 +316,7 @@ function startGame(queued) {
     gameData[ind].pollen = [];
 
 
-    var loop = setInterval(function() {
+    var loop = setInterval(function () {
         if (games[ind].turn == games[ind].totalTurns + PLAYER_NUMBER) {
             broadcast("draw", games, displays);
             clearInterval(loop)
