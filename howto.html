@@ -1,0 +1,438 @@
+<!doctype html>
+<html>
+
+<head>
+    <title>How to</title>
+    <style>
+        body {
+            margin: 0 5%;
+        }
+
+        pre {
+            background-color: black;
+            color: #00aa00;
+            width: 100%;
+            overflow: auto;
+            font-family: monospace;
+        }
+
+        .large-code {
+            height: 50vw;
+        }
+
+        .inline-code {
+            background-color: black;
+            color: #00aa00;
+            font-family: monospace;
+            padding: 0.1em;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>How my bee bot works</h1>
+    <pre class='large-code'>
+var bot = require("./bot"); //Don't change this
+bot.hostURL = 'http://127.0.0.1:3000'; //Put the server url/IP adress here!
+bot.key = "sg0397grmoa"; //Set your bot key to this string!
+
+var task = 'normal'
+var lastBaseTurn = 0
+
+bot.direction = function (game) {
+    /* ~~~ Determines and Organizes Data About The Game ~~~ */
+    var enemyBots = [];
+    var enemyBases = [];
+    for (let i = 0; i < game.players.length; i++) { //Adds all other bots to the enemyBots array.
+        if (game.players[i].id != game.myBot.id) {
+            enemyBases.push(game.bases[i]); //Adds all other bases to the enemyBases array
+            enemyBots.push(game.players[i]);
+        }
+    }
+    var myDir = "none";
+    var dirs = ["north", "east", "south", "west"];
+
+    /* ~~ This code decides what to do ~~ */
+    //Switch to returning home if we are too far away from base for the number of turns left, we are carrying too much pollen, or there are too few turns left.
+    if (bot.findDistance(game.myBot.pos, game.myBase.pos) >= (3 * (game.totalTurns - game.turn)) || game.turn > 925) {
+        task = 'returnToBase'
+    } else if (game.myBot.pollen > 500) {
+        task = 'returnToBaseAvoidBots'
+    }
+    //Go back to normal behavior once we reach base.
+    if (game.myBot.pos.toString() == game.myBase.pos.toString()) {//toString is necessary because arrays are compared by reference, but we want to compare by value.
+        task = 'normal'
+        lastBaseTurn = game.turn
+    }
+    /* ~~This code decides how to do it ~~ */
+    if (task == 'normal') {
+        let targets = [] //Every point on the grid gets an attractiveness score based on how advantageous or disadvantageous it would be to go there. For most points, this will be zero because there is nothing happening in most places.
+
+        //Avoid all of the bees that will cause us to lose pollen, ignore the ones that won't.
+        for (enemy of enemyBots) {
+            if (enemy.pollen < game.myBot.pollen) {
+                bot.avoid(enemy.pos)
+            }
+        }
+
+        //Map out the attractiveness of each flower. This will be equivalent to pollen / walking distance because flowers with more pollen are better and closer flowers are better.
+        for (let flower of game.flowers) {
+            let distance = bot.findDistance(game.myBot.pos, flower.pos)
+            targets.push({
+                pos: flower.pos,
+                pollenNet: flower.pollen,
+                distance: distance,
+                attractiveness: flower.pollen / (distance)
+            })
+        }
+        //Map out the attractiveness of enemy bases. Same as flowers, except multiplied by 0.5 because we don't get it all at once.
+        for (base of enemyBases) {
+            let distance = bot.findDistance(game.myBot.pos, base.pos)
+            targets.push({
+                pos: base.pos,
+                pollenNet: base.pollen,
+                distance: distance,
+                attractiveness: 0.5 * base.pollen / distance
+            })
+        }
+
+        //Calculate the attractiveness of my base. This is my pollen / distance to base, times 0.05. The amount of pollen I have is how much it will affect my score, and we divide by distance because we don't want to go back to base if it's too far away. We multiply by 0.5 because we rarely want to actually do this except for when the task code decides to do it. Also, we don't want to do it at all if we did it too recently.
+        if (game.turn >= lastBaseTurn + 5) {
+            let baseDistance = bot.findDistance(game.myBot.pos, game.myBase.pos)
+            targets.push({
+                pos: game.myBase.pos,
+                pollenNet: game.myBot.pollen,
+                distance: baseDistance,
+                attractiveness: 0.05 * game.myBot.pollen / (baseDistance)
+            })
+        }
+
+        //Now, choose which target to go to
+        targets.sort((a, b) => {
+            if (a.attractiveness < b.attractiveness) { return -1 }
+            else if (a.attractiveness > b.attractiveness) { return 1 }
+            else { return 0 }
+        })
+        targets.reverse()   //Yes, I could have swapped -1 and 1 in the previous function to produce marginally faster code, but sort is expected to sort low to high, and I don't want to break that expectation.
+
+        //Go to the first target on the list that is not blocked. A target is blocked if we can't find the next step and we aren't already there, meaning that we couldn't find the next step because of obstacles.
+        for (target of targets) {
+            myDir = bot.nextStep(game.myBot.pos, target.pos)
+            if (myDir == undefined) {
+                if (game.myBot.pos.toString() == target.pos.toString()) {
+                    break
+                } else {
+                    continue
+                }
+            } else {
+                break
+            }
+        }
+        console.log(`Going in ${myDir}`)
+    } else if (task == 'returnToBaseAvoidBots') {
+        console.log('Going home, but avoiding other bots')
+        for (enemy of enemyBots) {
+            if (enemy.pollen < game.myBot.pollen) {
+                bot.avoid(enemy.pos)
+            }
+        }
+        myDir = bot.nextStep(game.myBot.pos, game.myBase.pos)
+    } else {
+        console.log('Going home')
+        myDir = bot.nextStep(game.myBot.pos, game.myBase.pos)
+    }
+    return myDir;
+}
+//DO NOT CHANGE ANYTHING BELOW THIS LINE
+bot();
+</pre>
+    <h2>What I created</h2>
+    <p>I created a bot that tries to put as much pollen as possible into its base.</p>
+    <h2>How it works</h2>
+    <p>
+        The bot has three modes of operation: Rushing home, going home safely, and collecting pollen. It decides which
+        mode to operate in based on several factors.
+    </p>
+    <p>
+        The bot rushes home when it is too far from base for the number of turns left in the game or we are more than
+        925 turns in. In this mode, it will just take the shortest path to base and will not try to avoid other bots
+        because it is essential to get all pollen to base before the game ends, and bot avoidance can cost a lot of
+        time.
+    </p>
+    <p>
+        The bot safely goes home when it has more than 500 pollen because carrying that amount of pollen means that a
+        lot of it can be lost quickly in a collision, and trying to avoid collisions starts to cost too much time. In
+        this mode, it will not actively try to collect pollen, but instead just try to return home. However, it will
+        avoid other bots with less pollen that get in the way.
+    </p>
+    <p>
+        The bot starts out in pollination mode, and switches back to pollination mode whenever it arrives at its base.
+        In pollination mode, it will return to its base if it is close, has a lot of pollen, and has not been to the
+        base recently, but the necessary conditions do not happen very often. It avoids bots with less pollen and
+        repeatedly chooses which point (out of flowers and enemy bases) to target based on how much pollen they have and
+        how far away they are.
+    </p>
+    <h2>Code details</h2>
+    <pre>
+//Switch to returning home if we are too far away from base for the number of turns left, we are carrying too much pollen, or there are too few turns left.
+if (bot.findDistance(game.myBot.pos, game.myBase.pos) >= (3 * (game.totalTurns - game.turn)) || game.turn > 925) {
+    task = 'returnToBase'
+} else if (game.myBot.pollen > 500) {
+    task = 'returnToBaseAvoidBots'
+}
+//Go back to normal behavior once we reach base.
+if (game.myBot.pos.toString() == game.myBase.pos.toString()) {//toString is necessary because arrays are compared by reference, but we want to compare by value.
+    task = 'normal'
+    lastBaseTurn = game.turn
+}
+    </pre>
+    <p>
+        This code is what decides the action that the bot will take. It sets the value of the task variable, which is
+        persistent across calls to the function so it is remembered after every turn. There are three conditions that it
+        checks for.
+    </p>
+    <ol>
+        <li>
+            The first condition that it checks for is <span class='inline-code'>bot.findDistance(game.myBot.pos,
+                game.myBase.pos) >= (3 * (game.totalTurns - game.turn)) || game.turn > 925 </span>. This condition is
+            true if the distance to
+            the base is greater than three times the number of turns remaining in the game. It is also true if we are
+            more than 925 turns in. This sets the task variable to 'returnToBase', which will cause the bot to return to
+            its base as quickly as it can.
+        </li>
+        <li>
+            The next condition that it checks for, and only if the first condition failed, is <span
+                class='inline-code'>game.myBot.pollen > 500</span>. When this is true, it means that we have a lot of
+            pollen. It sets the task variable to 'returnToBaseAvoidBots', which will cause the bot to return to base
+            while also avoiding other bots.
+        </li>
+        <li>
+            The last condition that it checks for is <span class='inline-code'>game.myBot.pos.toString() ==
+                game.myBase.pos.toString()</span>. This condition is true when the bot is at its base. The toString is
+            necessary because applying == to a string will check based on equality, while applying == to an array will
+            check based on memory address. The same position will produce the same string while a different position
+            will produce a different string, so this method works to compare arrays by value. When that is true, task is
+            set to 'normal', which will cause the bot to try to collect pollen. It also sets lastBaseTurn to the current
+            turn, which is used to prevent it from going to the base too often.
+        </li>
+    </ol>
+    <p>
+        If none of the conditions are true, the task variable is kept as it was before.
+    </p>
+    <pre class='large-code'>
+if (task == 'normal') {
+    let targets = [] //Every point on the grid gets an attractiveness score based on how advantageous or disadvantageous it would be to go there. For most points, this will be zero because there is nothing happening in most places.
+
+    //Avoid all of the bees that will cause us to lose pollen, ignore the ones that won't.
+    for (enemy of enemyBots) {
+        if (enemy.pollen < game.myBot.pollen) {
+            bot.avoid(enemy.pos)
+        }
+    }
+
+    //Map out the attractiveness of each flower. This will be equivalent to pollen / walking distance because flowers with more pollen are better and closer flowers are better.
+    for (let flower of game.flowers) {
+        let distance = bot.findDistance(game.myBot.pos, flower.pos)
+        targets.push({
+            pos: flower.pos,
+            pollenNet: flower.pollen,
+            distance: distance,
+            attractiveness: flower.pollen / (distance)
+        })
+    }
+    //Map out the attractiveness of enemy bases. Same as flowers, except multiplied by 0.5 because we don't get it all at once.
+    for (base of enemyBases) {
+        let distance = bot.findDistance(game.myBot.pos, base.pos)
+        targets.push({
+            pos: base.pos,
+            pollenNet: base.pollen,
+            distance: distance,
+            attractiveness: 0.5 * base.pollen / distance
+        })
+    }
+
+    //Calculate the attractiveness of my base. This is my pollen / distance to base, times 0.05. The amount of pollen I have is how much it will affect my score, and we divide by distance because we don't want to go back to base if it's too far away. We multiply by 0.5 because we rarely want to actually do this except for when the task code decides to do it. Also, we don't want to do it at all if we did it too recently.
+    if (game.turn >= lastBaseTurn + 5) {
+        let baseDistance = bot.findDistance(game.myBot.pos, game.myBase.pos)
+        targets.push({
+            pos: game.myBase.pos,
+            pollenNet: game.myBot.pollen,
+            distance: baseDistance,
+            attractiveness: 0.05 * game.myBot.pollen / (baseDistance)
+        })
+    }
+
+    //Now, choose which target to go to
+    targets.sort((a, b) => {
+        if (a.attractiveness < b.attractiveness) { return -1 }
+        else if (a.attractiveness > b.attractiveness) { return 1 }
+        else { return 0 }
+    })
+    targets.reverse()   //Yes, I could have swapped -1 and 1 in the previous function to produce marginally faster code, but sort is expected to sort low to high, and I don't want to break that expectation.
+
+    //Go to the first target on the list that is not blocked. A target is blocked if we can't find the next step and we aren't already there, meaning that we couldn't find the next step because of obstacles.
+    for (target of targets) {
+        myDir = bot.nextStep(game.myBot.pos, target.pos)
+        if (myDir == undefined) {
+            if (game.myBot.pos.toString() == target.pos.toString()) {
+                break
+            } else {
+                continue
+            }
+        } else {
+            break
+        }
+    }
+    console.log(`Going in ${myDir}`)
+}
+    </pre>
+    <p>
+        This is the code responsible for collecting the pollen.
+    </p>
+    <pre>
+let targets = [] //Every point on the grid gets an attractiveness score based on how advantageous or disadvantageous it would be to go there. For most points, this will be zero because there is nothing happening in most places.
+
+//Avoid all of the bees that will cause us to lose pollen, ignore the ones that won't.
+for (enemy of enemyBots) {
+    if (enemy.pollen < game.myBot.pollen) {
+        bot.avoid(enemy.pos)
+    }
+}
+    </pre>
+    <p>The first thing it does is initializes an array for all
+        of the targets that it will try to chase. Next, it loops through the enemy bots and tells the pathfinding
+        algorithm to treat bots with less pollen and the grid squares surrounding them as barricades. This is done
+        because if my bot collides with another bot that has less pollen, it will lose some pollen. I chose not to have
+        it chase bots with more pollen because most other bots will probably try to avoid mine, and this turned out to
+        make my bot waste a lot of time chasing and failing to catch other bees.
+    </p>
+    <pre>
+//Map out the attractiveness of each flower. This will be equivalent to pollen / walking distance because flowers with more pollen are better and closer flowers are better.
+for (let flower of game.flowers) {
+    let distance = bot.findDistance(game.myBot.pos, flower.pos)
+    targets.push({
+        pos: flower.pos,
+        pollenNet: flower.pollen,
+        distance: distance,
+        attractiveness: flower.pollen / (distance)
+    })
+}
+//Map out the attractiveness of enemy bases. Same as flowers, except multiplied by 0.5 because we don't get it all at once.
+for (base of enemyBases) {
+    let distance = bot.findDistance(game.myBot.pos, base.pos)
+    targets.push({
+        pos: base.pos,
+        pollenNet: base.pollen,
+        distance: distance,
+        attractiveness: 0.5 * base.pollen / distance
+    })
+}
+
+//Calculate the attractiveness of my base. This is my pollen / distance to base, times 0.05. The amount of pollen I have is how much it will affect my score, and we divide by distance because we don't want to go back to base if it's too far away. We multiply by 0.5 because we rarely want to actually do this except for when the task code decides to do it. Also, we don't want to do it at all if we did it too recently.
+if (game.turn >= lastBaseTurn + 5) {
+    let baseDistance = bot.findDistance(game.myBot.pos, game.myBase.pos)
+    targets.push({
+        pos: game.myBase.pos,
+        pollenNet: game.myBot.pollen,
+        distance: baseDistance,
+        attractiveness: 0.05 * game.myBot.pollen / (baseDistance)
+    })
+}
+    </pre>
+    <p>
+        Next, the bot looks through all possible targets and makes a list of them in one variable. Each target has a
+        position, net amount of pollen, distance, and attractiveness score that represents how much the bot wants to go
+        to that target. However, each in-game item has its attractiveness calculated differently.
+    </p>
+    <ol>
+        <li>
+            Flowers have an attractiveness score of how much pollen they have divided by how far away they are. This
+            equation was chosen because it rewards flowers for having a lot of pollen and punishes flowers for being far
+            away, but guarantees that all flowers will have a positive attractiveness. Because traveling is time
+            consuming, the farther away a flower is, the more pollen it has to have to make up for its distance.
+        </li>
+        <li>
+            Enemy bases have an attractiveness of the amount of honey they have divided by how far away they are,
+            multiplied by 0.5. The multiplication by 0.5 is done because instead of getting all of the pollen at once
+            (like with flowers), we only get 10 per turn, so the bot should prefer going to an otherwise equally
+            attractive flower. 0.5 is less than 1, so it reduces the attractiveness of the enemy bases by a predictable
+            amount.
+        </li>
+        <li>
+            The bot's own base is only considered at all if we haven't been to it in the past 5 turns. If we have, it
+            has been ignored. Otherwise, has an attractiveness of 0.05 times the bot's pollen divided by how far away it
+            is. The attractiveness of the base is penalized by a large amount because while it would be a good idea for
+            the bot to go to the base if it has a lot of pollen and is very close, it should not go to the base if it is
+            somewhat close or has been there recently. The code that sets the task variable covers almost all of the
+            cases where the bot should return to its base.
+        </li>
+    </ol>
+    <pre>
+//Now, choose which target to go to
+targets.sort((a, b) => {
+    if (a.attractiveness < b.attractiveness) { return -1 }
+    else if (a.attractiveness > b.attractiveness) { return 1 }
+    else { return 0 }
+})
+targets.reverse()   //Yes, I could have swapped -1 and 1 in the previous function to produce marginally faster code, but sort is expected to sort low to high, and I don't want to break that expectation.
+
+//Go to the first target on the list that is not blocked. A target is blocked if we can't find the next step and we aren't already there, meaning that we couldn't find the next step because of obstacles.
+for (target of targets) {
+    myDir = bot.nextStep(game.myBot.pos, target.pos)
+    if (myDir == undefined) {
+        if (game.myBot.pos.toString() == target.pos.toString()) {
+            break
+        } else {
+            continue
+        }
+    } else {
+        break
+    }
+}
+console.log(`Going in ${myDir}`)
+    </pre>
+    <p>
+        Finally, the bot has to decide which target of the targets it has mapped to actually try to go to. To do that,
+        it first has to sort the targets in order of descending attractiveness. Then, it loops through all of the
+        targets. For each target, the bot will first attempt to pathfind to it. If pathfinding is successful, it stops
+        looping through targets and goes to the one it just looked at. This is usually the first one. If pathfinding is
+        unsuccessful, bot.nextStep returns undefined. The bot then checks why it was unsuccessful. If it is because it
+        is already on that target, it leaves myDir as undefined so it stays in place. If it is because there is no way
+        for the bot to get to that target, which usually happens when enemies are blocking it, the bot moves on to the
+        next target.
+    </p>
+    <pre>
+else if (task == 'returnToBaseAvoidBots') {
+    console.log('Going home, but avoiding other bots')
+    for (enemy of enemyBots) {
+        if (enemy.pollen < game.myBot.pollen) {
+            bot.avoid(enemy.pos)
+        }
+    }
+    myDir = bot.nextStep(game.myBot.pos, game.myBase.pos)
+} else {
+    console.log('Going home')
+    myDir = bot.nextStep(game.myBot.pos, game.myBase.pos)
+}
+return myDir;
+    </pre>
+    <p>
+        This is the code responsible for returning to base most of the time. The first case adds all of the enemies to
+        the list of spaces to avoid, then pathfinds home and takes the next step. This is useful when carrying pollen
+        back. The second case just goes home, which is useful when the game is ending.
+    </p>
+    <h2>Conclusion</h2>
+    <p>
+        The bot worked correctly and reliably collected a lot of pollen.
+    </p>
+    <p>
+        This project has taught me that in some cases, I can adapt code to handle many things with minimal changes, and
+        sometimes I need code just for one or a few specific cases.
+    </p>
+    <p>
+        I noticed that my bot often ended up very close to other bots. If I had more time, I would have it penalize
+        flowers and bases for being close to other bots to reduce the risk of collisions.
+    </p>
+</body>
+
+</html>

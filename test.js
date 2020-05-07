@@ -22,8 +22,7 @@ bot.direction = function (game) {
     //Switch to returning home if we are too far away from base for the number of turns left, we are carrying too much pollen, or there are too few turns left.
     if (bot.findDistance(game.myBot.pos, game.myBase.pos) >= (3 * (game.totalTurns - game.turn)) || game.turn > 925) {
         task = 'returnToBase'
-    }
-    if (game.myBot.pollen > 500) {
+    } else if (game.myBot.pollen > 500) {
         task = 'returnToBaseAvoidBots'
     }
     //Go back to normal behavior once we reach base.
