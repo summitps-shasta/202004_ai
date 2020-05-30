@@ -1,5 +1,5 @@
 var bot = require("./bot"); //Don't change this
-bot.hostURL = 'http://127.0.0.1:3000'; //Put the server url/IP adress here!
+bot.hostURL = 'http://127.0.0.1:8080'; //Put the server url/IP adress here!
 bot.key = "xwzwfr7gbs"; //Set your bot key to this string!
 /***************************************************/
 //Write your code in this function!!!
